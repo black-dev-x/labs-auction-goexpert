@@ -1,6 +1,7 @@
 package auction_usecase
 
 import (
+	"auction-go/configuration/logger"
 	"auction-go/internal/entity/auction_entity"
 	"auction-go/internal/entity/bid_entity"
 	"auction-go/internal/internal_error"
@@ -64,6 +65,24 @@ type AuctionStatus int64
 type AuctionUseCase struct {
 	auctionRepositoryInterface auction_entity.AuctionRepositoryInterface
 	bidRepositoryInterface     bid_entity.BidEntityRepository
+}
+
+func (au *AuctionUseCase) updateAuctionToCompleted(id string) {
+	logger.Info("Found expired auction: " + id)
+	if err := au.auctionRepositoryInterface.UpdateAuctionStatus(id, auction_entity.Completed); err != nil {
+		logger.Error("Error updating auction status", err)
+	}
+}
+
+func (au *AuctionUseCase) CheckForExpiredAuctions() {
+	auctions, error := au.auctionRepositoryInterface.GetNextExpiredAuctions()
+	if error != nil {
+		logger.Error("Error getting expired auctions", error)
+		return
+	}
+	for _, auction := range auctions {
+		go au.updateAuctionToCompleted(auction.Id)
+	}
 }
 
 func (au *AuctionUseCase) CreateAuction(

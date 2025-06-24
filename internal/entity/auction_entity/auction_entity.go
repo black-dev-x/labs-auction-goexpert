@@ -3,6 +3,7 @@ package auction_entity
 import (
 	"auction-go/internal/internal_error"
 	"context"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,6 +39,14 @@ func (au *Auction) Validate() *internal_error.InternalError {
 	}
 
 	return nil
+}
+
+func (au *Auction) GetExpiredTime() time.Time {
+	duration, err := time.ParseDuration(os.Getenv("AUCTION_DURATION"))
+	if err != nil {
+		duration = 24 * time.Hour // Default to 24 hours if parsing fails
+	}
+	return au.Timestamp.Add(duration)
 }
 
 type Auction struct {
@@ -76,4 +85,8 @@ type AuctionRepositoryInterface interface {
 
 	FindAuctionById(
 		ctx context.Context, id string) (*Auction, *internal_error.InternalError)
+
+	GetNextExpiredAuctions() ([]Auction, *internal_error.InternalError)
+
+	UpdateAuctionStatus(id string, status AuctionStatus) *internal_error.InternalError
 }
