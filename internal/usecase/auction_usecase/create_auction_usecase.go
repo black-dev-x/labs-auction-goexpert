@@ -7,6 +7,7 @@ import (
 	"auction-go/internal/internal_error"
 	"auction-go/internal/usecase/bid_usecase"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -36,10 +37,15 @@ type WinningInfoOutputDTO struct {
 func NewAuctionUseCase(
 	auctionRepositoryInterface auction_entity.AuctionRepositoryInterface,
 	bidRepositoryInterface bid_entity.BidEntityRepository) AuctionUseCaseInterface {
-	return &AuctionUseCase{
+
+	logger.Info("Creating AuctionUseCase...")
+
+	auctionUseCase := AuctionUseCase{
 		auctionRepositoryInterface: auctionRepositoryInterface,
 		bidRepositoryInterface:     bidRepositoryInterface,
 	}
+	go auctionUseCase.CheckForExpiredAuctions()
+	return &auctionUseCase
 }
 
 type AuctionUseCaseInterface interface {
@@ -76,8 +82,8 @@ func (au *AuctionUseCase) updateAuctionToCompleted(id string) {
 }
 
 func (au *AuctionUseCase) CheckForExpiredAuctions() {
+	fmt.Println("Starting background job to check for expired auctions...")
 	for {
-		<-time.After(5 * time.Second)
 		auctions, error := au.auctionRepositoryInterface.GetNextExpiredAuctions()
 		if error != nil {
 			logger.Error("Error getting expired auctions", error)
@@ -86,12 +92,13 @@ func (au *AuctionUseCase) CheckForExpiredAuctions() {
 		var waitGroup sync.WaitGroup
 		waitGroup.Add(len(auctions))
 		for _, auction := range auctions {
-			go func() {
-				au.updateAuctionToCompleted(auction.Id)
+			go func(id string) {
+				au.updateAuctionToCompleted(id)
 				waitGroup.Done()
-			}()
+			}(auction.Id)
 		}
 		waitGroup.Wait()
+		<-time.After(5 * time.Second)
 	}
 }
 
