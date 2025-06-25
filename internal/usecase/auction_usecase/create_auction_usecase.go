@@ -7,6 +7,7 @@ import (
 	"auction-go/internal/internal_error"
 	"auction-go/internal/usecase/bid_usecase"
 	"context"
+	"sync"
 	"time"
 )
 
@@ -75,13 +76,22 @@ func (au *AuctionUseCase) updateAuctionToCompleted(id string) {
 }
 
 func (au *AuctionUseCase) CheckForExpiredAuctions() {
-	auctions, error := au.auctionRepositoryInterface.GetNextExpiredAuctions()
-	if error != nil {
-		logger.Error("Error getting expired auctions", error)
-		return
-	}
-	for _, auction := range auctions {
-		go au.updateAuctionToCompleted(auction.Id)
+	for {
+		<-time.After(5 * time.Second)
+		auctions, error := au.auctionRepositoryInterface.GetNextExpiredAuctions()
+		if error != nil {
+			logger.Error("Error getting expired auctions", error)
+			return
+		}
+		var waitGroup sync.WaitGroup
+		waitGroup.Add(len(auctions))
+		for _, auction := range auctions {
+			go func() {
+				au.updateAuctionToCompleted(auction.Id)
+				waitGroup.Done()
+			}()
+		}
+		waitGroup.Wait()
 	}
 }
 
